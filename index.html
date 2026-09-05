@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>뽀모도로 타이머</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f4f1ea;
+            margin: 0;
+        }
+        .timer-card {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .time {
+            font-size: 48px;
+            font-weight: bold;
+            margin: 20px 0;
+            color: #d9534f;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            background-color: #333;
+            color: white;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<div class="timer-card">
+    <h2>뽀모도로 타이머</h2>
+    <div class="time" id="timer">25:00</div>
+    <button onclick="startTimer()">시작</button>
+    <button onclick="stopTimer()">일시정지</button>
+    <button onclick="resetTimer()">리셋</button>
+</div>
+
+<script>
+    let timeLeft = 25 * 60;
+    let timerId = null;
+
+    function updateDisplay() {
+        const min = String(Math.floor(timeLeft / 60)).padStart(2, '0');
+        const sec = String(timeLeft % 60).padStart(2, '0');
+        document.getElementById('timer').textContent = `${min}:${sec}`;
+    }
+
+    function startTimer() {
+        if (timerId !== null) return;
+        timerId = setInterval(() => {
+            if (timeLeft > 0) {
+                timeLeft--;
+                updateDisplay();
+            } else {
+                clearInterval(timerId);
+                alert("시간이 완료되었습니다!");
+            }
+        }, 1000);
+    }
+
+    function stopTimer() {
+        clearInterval(timerId);
+        timerId = null;
+    }
+
+    function resetTimer() {
+        stopTimer();
+        timeLeft = 25 * 60;
+        updateDisplay();
+    }
+</script>
+
+</body>
+</html>
