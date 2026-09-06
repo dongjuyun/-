@@ -6,7 +6,6 @@
   <title>빈티지 원형 뽀모도로 타이머</title>
   <style>
     :root {
-      /* 빈티지 컬러 팔레트 */
       --color-red: #d9534f;
       --color-black: #4a4a4a;
       --color-green: #6b8e23;
@@ -32,7 +31,6 @@
       overflow: hidden;
     }
 
-    /* 설정 버튼 (오른쪽 위) */
     .settings-btn {
       position: absolute;
       top: 25px;
@@ -49,7 +47,6 @@
       transform: rotate(45deg);
     }
 
-    /* 중앙 원형 타이머 Container */
     .timer-container {
       position: relative;
       width: 320px;
@@ -76,12 +73,11 @@
       stroke: var(--theme-color);
       stroke-width: 12;
       stroke-linecap: round;
-      stroke-dasharray: 879.64; /* 2 * PI * r (r=140) */
+      stroke-dasharray: 879.64;
       stroke-dashoffset: 0;
       transition: stroke-dashoffset 1s linear, stroke 0.3s;
     }
 
-    /* 타이머 중앙 텍스트 UI */
     .timer-center-content {
       position: absolute;
       display: flex;
@@ -125,7 +121,7 @@
       opacity: 0.8;
     }
 
-    /* 설정 모달 창 */
+    /* 공통 모달 오버레이 */
     .modal-overlay {
       position: absolute;
       top: 0;
@@ -139,6 +135,7 @@
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.3s;
+      z-index: 10;
     }
 
     .modal-overlay.active {
@@ -173,7 +170,6 @@
       margin-bottom: 8px;
     }
 
-    /* 색상 선택 버튼그룹 */
     .color-options {
       display: flex;
       gap: 10px;
@@ -202,8 +198,7 @@
     .btn-green { background-color: var(--color-green); }
     .btn-sky { background-color: var(--color-sky); }
 
-    /* 프리셋 선택 드롭다운 */
-    .preset-select {
+    .preset-select, .bgm-select {
       width: 100%;
       padding: 8px;
       border-radius: 5px;
@@ -212,7 +207,6 @@
       background: #fff;
     }
 
-    /* 직접 입력 폼 */
     .custom-time-group {
       display: flex;
       gap: 8px;
@@ -243,7 +237,6 @@
       background-color: #333;
     }
 
-    /* 소리 설정 토글 버튼 */
     .sound-toggle-group {
       display: flex;
       gap: 10px;
@@ -276,14 +269,23 @@
       border-radius: 8px;
       cursor: pointer;
     }
+
+    /* 알림 완료 팝업 */
+    .alert-modal {
+      text-align: center;
+    }
+
+    .alert-modal p {
+      font-size: 1rem;
+      color: #444;
+      margin-bottom: 20px;
+    }
   </style>
 </head>
 <body>
 
-  <!-- 설정 버튼 -->
   <button class="settings-btn" id="openSettings">⚙️</button>
 
-  <!-- 원형 타이머 영역 -->
   <div class="timer-container">
     <svg class="svg-ring">
       <circle class="ring-bg" cx="160" cy="160" r="140"></circle>
@@ -304,7 +306,6 @@
     <div class="modal">
       <h3>타이머 설정</h3>
       
-      <!-- 색상 고르기 -->
       <div class="setting-section">
         <label>테마 색상 (빈티지)</label>
         <div class="color-options">
@@ -315,7 +316,6 @@
         </div>
       </div>
 
-      <!-- 프리셋 선택 -->
       <div class="setting-section">
         <label>기본 시간 선택</label>
         <select class="preset-select" id="presetSelect">
@@ -325,7 +325,6 @@
         </select>
       </div>
 
-      <!-- 직접 시간 입력 -->
       <div class="setting-section">
         <label>직접 시간 입력 (분)</label>
         <div class="custom-time-group">
@@ -336,7 +335,18 @@
         </div>
       </div>
 
-      <!-- 알림음 설정 -->
+      <!-- 배경음악 설정 -->
+      <div class="setting-section">
+        <label>배경음악 선택</label>
+        <select class="bgm-select" id="bgmSelect">
+          <option value="none">없음</option>
+          <option value="fire">🔥 장작 소리</option>
+          <option value="rain">🌧️ 비 내리는 소리</option>
+
+          <option value="space">🌌 우주 소리</option>
+        </select>
+      </div>
+
       <div class="setting-section">
         <label>알림음 설정</label>
         <div class="sound-toggle-group">
@@ -346,6 +356,15 @@
       </div>
 
       <button class="close-btn" id="closeSettings">완료</button>
+    </div>
+  </div>
+
+  <!-- 시간 완료 알림 팝업 -->
+  <div class="modal-overlay" id="alertOverlay">
+    <div class="modal alert-modal">
+      <h3 id="alertTitle">시간 완료!</h3>
+      <p id="alertMessage">시간이 다 되었습니다.</p>
+      <button class="close-btn" id="closeAlertBtn">확인 (알림 끄기)</button>
     </div>
   </div>
 
@@ -361,7 +380,13 @@
     let timerId = null;
     let isWorking = true;
     let endTime = null;
-    let isSoundOn = true; // 소리 활성화 상태
+    let isSoundOn = true;
+
+    // Web Audio API 오디오 컨텍스트 및 변수
+    let audioCtx = null;
+    let bgmNode = null;
+    let alarmIntervalId = null;
+    let selectedBgm = 'none';
 
     const progressRing = document.getElementById('progressRing');
     const timeDisplay = document.getElementById('timeDisplay');
@@ -373,6 +398,7 @@
     const openSettings = document.getElementById('openSettings');
     const closeSettings = document.getElementById('closeSettings');
     const presetSelect = document.getElementById('presetSelect');
+    const bgmSelect = document.getElementById('bgmSelect');
     const colorBtns = document.querySelectorAll('.color-btn');
 
     const customWork = document.getElementById('customWork');
@@ -382,29 +408,151 @@
     const soundOnBtn = document.getElementById('soundOnBtn');
     const soundOffBtn = document.getElementById('soundOffBtn');
 
-    // 가볍고 단조로운 알림음 생성 (Web Audio API)
-    function playBeepSound() {
+    const alertOverlay = document.getElementById('alertOverlay');
+    const alertTitle = document.getElementById('alertTitle');
+    const alertMessage = document.getElementById('alertMessage');
+    const closeAlertBtn = document.getElementById('closeAlertBtn');
+
+    function getAudioContext() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+
+    // 단발성 띵띵음 소리 (알림용)
+    function playSingleBeep() {
+      const ctx = getAudioContext();
+      const now = ctx.currentTime;
+
+      // 1번째 띵 (D5 노선)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(587.33, now);
+      gain1.gain.setValueAtTime(0.15, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.2);
+
+      // 2번째 띵 (A5 노선)
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(880, now + 0.15);
+      gain2.gain.setValueAtTime(0.15, now + 0.15);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.15);
+      osc2.stop(now + 0.35);
+    }
+
+    // 반복 알림음 시작
+    function startAlarmLoop() {
       if (!isSoundOn) return;
+      stopAlarmLoop();
+      playSingleBeep();
+      alarmIntervalId = setInterval(() => {
+        playSingleBeep();
+      }, 600);
+    }
 
-      try {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
+    // 알림음 중지
+    function stopAlarmLoop() {
+      if (alarmIntervalId !== null) {
+        clearInterval(alarmIntervalId);
+        alarmIntervalId = null;
+      }
+    }
 
-        osc.type = 'sine'; // 순수한 부드러운 음
-        osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5 노트를 나타내는 주파수
+    // 배경음악 제어 함수 (Web Audio API 오디오 합성)
+    function startBgm() {
+      stopBgm();
+      if (selectedBgm === 'none') return;
 
-        // 부드럽게 감쇄하는 볼륨 조절
-        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+      const ctx = getAudioContext();
 
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
+      if (selectedBgm === 'fire') {
+        // 장작 소리 (핑크 노이즈 + 필터 + 크래클)
+        const bufferSize = ctx.sampleRate * 2;
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        let b0 = 0, b1 = 0, b2 = 0;
+        for (let i = 0; i < bufferSize; i++) {
+          const white = Math.random() * 2 - 1;
+          b0 = 0.99886 * b0 + white * 0.0555179;
+          b1 = 0.99332 * b1 + white * 0.0750759;
+          b2 = 0.96900 * b2 + white * 0.1538520;
+          data[i] = (b0 + b1 + b2) * 0.05;
+          if (Math.random() < 0.002) data[i] += (Math.random() - 0.5) * 0.5; // 불꽃 튀는 소리
+        }
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+        noise.loop = true;
+        const gain = ctx.createGain();
+        gain.gain.value = 0.3;
+        noise.connect(gain);
+        gain.connect(ctx.destination);
+        noise.start();
+        bgmNode = { stop: () => noise.stop() };
+
+      } else if (selectedBgm === 'rain') {
+        // 비 소리 (로패스 필터링된 화이트 노이즈)
+        const bufferSize = ctx.sampleRate * 2;
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+        noise.loop = true;
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 1000;
+        const gain = ctx.createGain();
+        gain.gain.value = 0.2;
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+        noise.start();
+        bgmNode = { stop: () => noise.stop() };
+
+      } else if (selectedBgm === 'space') {
+        // 우주 소리 (저음 사인파 + LFO 진동)
+        const osc = ctx.createOscillator();
+        const lfo = ctx.createOscillator();
+        const lfoGain = ctx.createGain();
+        const mainGain = ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.value = 70;
+
+        lfo.type = 'sine';
+        lfo.frequency.value = 0.2;
+        lfoGain.gain.value = 15;
+
+        lfo.connect(osc.frequency);
+        mainGain.gain.value = 0.15;
+        osc.connect(mainGain);
+        mainGain.connect(ctx.destination);
 
         osc.start();
-        osc.stop(audioCtx.currentTime + 0.5);
-      } catch (e) {
-        console.log('오디오 재생 실패:', e);
+        lfo.start();
+        bgmNode = { stop: () => { osc.stop(); lfo.stop(); } };
+      }
+    }
+
+    function stopBgm() {
+      if (bgmNode) {
+        try { bgmNode.stop(); } catch (e) {}
+        bgmNode = null;
       }
     }
 
@@ -434,21 +582,25 @@
         timerId = null;
         startBtn.textContent = '시작';
         
-        // 시간이 다 되었을 때 알림음 발생
-        playBeepSound();
+        // 배경음악 중지 및 반복 알림음 시작
+        stopBgm();
+        startAlarmLoop();
 
         isWorking = !isWorking;
         if (isWorking) {
           totalSec = workSec;
           leftSec = workSec;
           modeLabel.textContent = '공부 시간';
-          alert('휴식이 끝났습니다! 다시 집중해볼까요?');
+          alertTitle.textContent = '☕ 휴식 끝!';
+          alertMessage.textContent = '휴식 시간이 끝났습니다. 다시 집중해 볼까요?';
         } else {
           totalSec = breakSec;
           leftSec = breakSec;
           modeLabel.textContent = '☕ 휴식 시간';
-          alert('고생하셨습니다! 잠시 휴식을 취하세요.');
+          alertTitle.textContent = '🎉 공부 완료!';
+          alertMessage.textContent = '고생하셨습니다! 잠시 휴식을 취해보세요.';
         }
+        alertOverlay.classList.add('active');
         updateDisplay();
         return;
       }
@@ -457,16 +609,19 @@
     }
 
     function startTimer() {
+      getAudioContext();
       if (timerId !== null) {
         clearInterval(timerId);
         timerId = null;
         startBtn.textContent = '시작';
+        stopBgm();
         return;
       }
 
       startBtn.textContent = '일시정지';
       endTime = Date.now() + (leftSec * 1000);
       timerId = setInterval(tick, 500);
+      startBgm();
     }
 
     function resetTimer() {
@@ -475,6 +630,8 @@
         timerId = null;
         startBtn.textContent = '시작';
       }
+      stopBgm();
+      stopAlarmLoop();
       isWorking = true;
       modeLabel.textContent = '공부 시간';
       totalSec = workSec;
@@ -493,6 +650,11 @@
 
     openSettings.addEventListener('click', () => modalOverlay.classList.add('active'));
     closeSettings.addEventListener('click', () => modalOverlay.classList.remove('active'));
+
+    closeAlertBtn.addEventListener('click', () => {
+      stopAlarmLoop();
+      alertOverlay.classList.remove('active');
+    });
 
     colorBtns.forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -514,6 +676,13 @@
       resetTimer();
     });
 
+    bgmSelect.addEventListener('change', (e) => {
+      selectedBgm = e.target.value;
+      if (timerId !== null) {
+        startBgm();
+      }
+    });
+
     applyCustomBtn.addEventListener('click', () => {
       const w = parseInt(customWork.value);
       const b = parseInt(customBreak.value);
@@ -529,7 +698,6 @@
       alert(`공부 ${w}분 / 휴식 ${b}분으로 설정되었습니다.`);
     });
 
-    // 알림음 토글 설정
     soundOnBtn.addEventListener('click', () => {
       isSoundOn = true;
       soundOnBtn.classList.add('active');
@@ -538,6 +706,7 @@
 
     soundOffBtn.addEventListener('click', () => {
       isSoundOn = false;
+      stopAlarmLoop();
       soundOffBtn.classList.add('active');
       soundOnBtn.classList.remove('active');
     });
